@@ -59,38 +59,25 @@ const uploadProfilePicture = async (req, res) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Get current user to delete old profile picture
-    const currentUser = await User.findById(req.user._id);
-    
-    // Delete old profile picture if exists
-    if (currentUser.profilePicture) {
-      const oldImagePath = path.join(__dirname, '../uploads/profiles', path.basename(currentUser.profilePicture));
-      if (fs.existsSync(oldImagePath)) {
-        fs.unlinkSync(oldImagePath);
-      }
-    }
+    // For Vercel deployment, we'll store the image as base64
+    // In production, you should use cloud storage like Cloudinary or AWS S3
+    const imageBuffer = req.file.buffer;
+    const base64Image = `data:${req.file.mimetype};base64,${imageBuffer.toString('base64')}`;
 
-    // Update user with new profile picture path
-    const profilePicturePath = `/uploads/profiles/${req.file.filename}`;
+    // Update user with new profile picture (base64)
     const user = await User.findByIdAndUpdate(
       req.user._id,
-      { profilePicture: profilePicturePath },
+      { profilePicture: base64Image },
       { new: true, runValidators: true }
     ).select('-password');
 
     res.json({
       message: 'Profile picture uploaded successfully',
       user,
-      profilePicture: profilePicturePath
+      profilePicture: base64Image
     });
   } catch (error) {
-    // Delete uploaded file if there's an error
-    if (req.file) {
-      const filePath = path.join(__dirname, '../uploads/profiles', req.file.filename);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }
+    console.error('Profile picture upload error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -100,12 +87,6 @@ const deleteProfilePicture = async (req, res) => {
     const user = await User.findById(req.user._id);
     
     if (user.profilePicture) {
-      // Delete the file from filesystem
-      const imagePath = path.join(__dirname, '../uploads/profiles', path.basename(user.profilePicture));
-      if (fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath);
-      }
-
       // Update user to remove profile picture
       const updatedUser = await User.findByIdAndUpdate(
         req.user._id,
